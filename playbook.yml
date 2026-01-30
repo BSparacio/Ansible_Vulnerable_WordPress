@@ -1,0 +1,43 @@
+---
+# =============================================================================
+# Main Playbook - WordPress Multi-Server Deployment
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# PLAY 1: Set up MySQL Database Server
+# -----------------------------------------------------------------------------
+# This runs on servers in the [database] group
+
+- name: Configure Database Server
+  hosts: database
+  become: true  # Run as root (sudo)
+  tags: mysql
+
+  roles:
+    - mysql
+
+# -----------------------------------------------------------------------------
+# PLAY 2: Set up WordPress Application Server
+# -----------------------------------------------------------------------------
+# This runs on servers in the [wordpress] group
+
+- name: Configure WordPress Server
+  hosts: wordpress
+  become: true
+  tags: wordpress
+
+  roles:
+    - wordpress
+
+# -----------------------------------------------------------------------------
+# PLAY 3: Set up Nginx Web Server
+# -----------------------------------------------------------------------------
+# This runs on servers in the [webserver] group
+
+- name: Configure Web Server
+  hosts: webserver
+  become: true
+  tags: nginx
+
+  roles:
+    - nginx
