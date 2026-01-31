@@ -3,8 +3,41 @@
 # Main Playbook - WordPress Multi-Server Deployment
 # =============================================================================
 
+# =============================================================================
+# PLAY 1: CORE PACKAGE INSTALLATION
+# =============================================================================
+# Packages needed for setting up WordPress, Nginx, and MySQL
+
+- name: Install and configure required packages on target system
+  hosts: all
+  become: yes
+  become_method: sudo
+  vars:
+    packages:
+      - apt
+      - ansible
+      - ansible-lint
+      - sshpass
+      - git
+      - curl
+      - wget
+      - python3-venv
+
+  tasks:
+    - name: Update package list
+      apt:
+        update_cache: yes
+      register: apt_update_result
+
+    - name: Install required packages
+      apt:
+        name: "{{ packages }}"
+        state: latest
+        update_cache: yes
+      register: apt_install_result
+
 # -----------------------------------------------------------------------------
-# PLAY 1: Set up MySQL Database Server
+# PLAY 2: Set up MySQL Database Server
 # -----------------------------------------------------------------------------
 # This runs on servers in the [database] group
 
@@ -17,7 +50,7 @@
     - mysql
 
 # -----------------------------------------------------------------------------
-# PLAY 2: Set up WordPress Application Server
+# PLAY 3: Set up WordPress Application Server
 # -----------------------------------------------------------------------------
 # This runs on servers in the [wordpress] group
 
@@ -30,7 +63,7 @@
     - wordpress
 
 # -----------------------------------------------------------------------------
-# PLAY 3: Set up Nginx Web Server
+# PLAY 4: Set up Nginx Web Server
 # -----------------------------------------------------------------------------
 # This runs on servers in the [webserver] group
 
