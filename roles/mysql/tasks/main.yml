@@ -150,3 +150,26 @@
 # -----------------------------------------------------------------------------
 # Handlers run ONLY when notified by a task.
 # This restarts MySQL when the config changes.
+
+# -----------------------------------------------------------------------------
+# POPULATE DATABASE
+# -----------------------------------------------------------------------------
+# Task 1: Create the table (Using ROOT credentials)
+- name: Create wp_flags table for CTF
+  community.mysql.mysql_query:
+    login_db: "{{ wordpress_db_name }}"
+    # CHANGE 1: Use root user
+    login_user: "{{ mysql_root_user }}"
+    # CHANGE 2: Use the root password variable from all.yml
+    login_password: "{{ mysql_root_password }}"
+    query: "CREATE TABLE IF NOT EXISTS wp_flags (id INT, flag VARCHAR(100), PRIMARY KEY (id));"
+
+# Task 2: Insert the flag (Using ROOT credentials)
+- name: Insert CTF Flag
+  community.mysql.mysql_query:
+    login_db: "{{ wordpress_db_name }}"
+    # CHANGE 1: Use root user
+    login_user: "{{ mysql_root_user }}"
+    # CHANGE 2: Use the root password variable from all.yml
+    login_password: "{{ mysql_root_password }}"
+    query: "INSERT INTO wp_flags (id, flag) VALUES (1, 'flag{sql_injection_success}') ON DUPLICATE KEY UPDATE flag='flag{sql_injection_success}';"

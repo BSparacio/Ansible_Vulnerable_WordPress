@@ -11,16 +11,14 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 echo "=========================================="
-echo "  Ansible - SSH Key Setup"
+echo "  Ansible Demo - SSH Key Setup"
 echo "=========================================="
 echo ""
 
 # Configuration
-# JUMP_HOST="sshjump@ssh.cyberrange.rit.edu"
-# REMOTE_USER="cyberrange"
-# REMOTE_PASS="cyberrange"
-REMOTE_USER="student"
-REMOTE_PASS="student"
+JUMP_HOST="sshjump@ssh.cyberrange.rit.edu"
+REMOTE_USER="cyberrange"
+REMOTE_PASS="Cyberrange123!"
 KEY_FILE="$HOME/.ssh/id_ed25519"
 
 # Check if sshpass is installed
@@ -64,18 +62,18 @@ if [ -f "$SSH_CONFIG" ]; then
 fi
 
 # Add jump host configuration if not already present
-# if ! grep -q "Host ssh.cyberrange.rit.edu" "$SSH_CONFIG" 2>/dev/null; then
-    # cat >> "$SSH_CONFIG" << 'EOF'
+if ! grep -q "Host ssh.cyberrange.rit.edu" "$SSH_CONFIG" 2>/dev/null; then
+    cat >> "$SSH_CONFIG" << 'EOF'
 
 # Ansible Demo - CyberRange Jump Host
-# Host ssh.cyberrange.rit.edu
-    # User sshjump
-    # StrictHostKeyChecking no
+Host ssh.cyberrange.rit.edu
+    User sshjump
+    StrictHostKeyChecking no
 
-# Host 100.65.*
-    # User cyberrange
-    # ProxyJump sshjump@ssh.cyberrange.rit.edu
-    # StrictHostKeyChecking no
+Host 100.65.*
+    User cyberrange
+    ProxyJump sshjump@ssh.cyberrange.rit.edu
+    StrictHostKeyChecking no
 EOF
     chmod 600 "$SSH_CONFIG"
     echo -e "${GREEN}✓ SSH config updated${NC}"
@@ -95,7 +93,7 @@ for SERVER in $SERVERS; do
     # Use sshpass to copy the key through the jump host
     if sshpass -p "$REMOTE_PASS" ssh-copy-id \
         -o StrictHostKeyChecking=no \
-        # -o ProxyJump="$JUMP_HOST" \
+        -o ProxyJump="$JUMP_HOST" \
         -i "$KEY_FILE.pub" \
         "$REMOTE_USER@$SERVER" 2>/dev/null; then
         echo -e "${GREEN}✓${NC}"
@@ -112,8 +110,7 @@ echo ""
 ALL_OK=true
 for SERVER in $SERVERS; do
     echo -n "  Testing $SERVER... "
-    # if ssh -o ConnectTimeout=10 -o ProxyJump="$JUMP_HOST" "$REMOTE_USER@$SERVER" "echo ok" 2>/dev/null | grep -q "ok"; then
-    if ssh -o ConnectTimeout=10 -o "$REMOTE_USER@$SERVER" "echo ok" 2>/dev/null | grep -q "ok"; then
+    if ssh -o ConnectTimeout=10 -o ProxyJump="$JUMP_HOST" "$REMOTE_USER@$SERVER" "echo ok" 2>/dev/null | grep -q "ok"; then
         echo -e "${GREEN}✓ Connected!${NC}"
     else
         echo -e "${RED}✗ Failed${NC}"

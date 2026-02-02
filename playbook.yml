@@ -2,44 +2,28 @@
 # =============================================================================
 # Main Playbook - WordPress Multi-Server Deployment
 # =============================================================================
-
+#
+# This playbook deploys a 3-tier WordPress stack:
+#
+#   [Web Server]  -->  [WordPress Server]  -->  [Database Server]
+#     (Nginx)            (PHP + WP)              (MySQL)
+#
+# Each "play" targets a different group of servers from our inventory.
+#
+# TO RUN THIS PLAYBOOK:
+#   ansible-playbook playbook.yml
+#
+# TO RUN JUST ONE ROLE (for testing):
+#   ansible-playbook playbook.yml --tags mysql
+#   ansible-playbook playbook.yml --tags wordpress
+#   ansible-playbook playbook.yml --tags nginx
+#
 # =============================================================================
-# PLAY 1: CORE PACKAGE INSTALLATION
-# =============================================================================
-# Packages needed for setting up WordPress, Nginx, and MySQL
-
-- name: Install and configure required packages on target system
-  hosts: all
-  become: yes
-  become_method: sudo
-  vars:
-    packages:
-      - apt
-      - ansible
-      - ansible-lint
-      - sshpass
-      - git
-      - curl
-      - wget
-      - python3-venv
-
-  tasks:
-    - name: Update package list
-      apt:
-        update_cache: yes
-      register: apt_update_result
-
-    - name: Install required packages
-      apt:
-        name: "{{ packages }}"
-        state: latest
-        update_cache: yes
-      register: apt_install_result
 
 # -----------------------------------------------------------------------------
-# PLAY 2: Set up MySQL Database Server
+# PLAY 1: Set up MySQL Database Server
 # -----------------------------------------------------------------------------
-# This runs on servers in the [database] group
+# This runs on servers in the [database] group (fffics-srv-2)
 
 - name: Configure Database Server
   hosts: database
@@ -50,22 +34,241 @@
     - mysql
 
 # -----------------------------------------------------------------------------
-# PLAY 3: Set up WordPress Application Server
+# PLAY 2: Set up WordPress Application Server
 # -----------------------------------------------------------------------------
-# This runs on servers in the [wordpress] group
+# This runs on servers in the [wordpress] group (fffics-srv-3)
 
 - name: Configure WordPress Server
   hosts: wordpress
   become: true
   tags: wordpress
 
+  pre_tasks:
+    - name: Check if WordPress is currently installed
+      ansible.builtin.stat:
+        path: /var/www/wordpress/wp-config.php
+      register: wp_config_check
+
+    - name: Reset Database
+      ansible.builtin.command: wp db reset --yes --path=/var/www/wordpress
+      become_user: www-data
+      register: wp_db_reset
+      # Only run if WP is actually there, otherwise this fails
+      when: wp_config_check.stat.exists
+      changed_when: "'Success' in wp_db_reset.stdout"
+      failed_when: wp_db_reset.rc != 0
+
+    - name: Remove existing WordPress directory
+      ansible.builtin.file:
+        path: /var/www/wordpress
+        state: absent
+
+    - name: Recreate empty WordPress directory
+      ansible.builtin.file:
+        path: /var/www/wordpress
+        state: directory
+        owner: www-data
+        group: www-data
+        mode: '0755'
+
   roles:
     - wordpress
 
 # -----------------------------------------------------------------------------
-# PLAY 4: Set up Nginx Web Server
+# POST TASKS: Configure WordPress Site
 # -----------------------------------------------------------------------------
-# This runs on servers in the [webserver] group
+  post_tasks:
+    - name: Download WP-CLI
+      ansible.builtin.get_url:
+        url: https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
+        dest: "/usr/local/bin/wp"
+        mode: '0755' # Executable permission
+
+    # - name: Move WP-CLI to global bin directory
+    #   ansible.builtin.copy:
+    #     src: "/tmp/wp-cli.phar"
+    #     dest: "/usr/local/bin/wp"
+    #     mode: "0755"
+    #     remote_src: true
+
+    # - name: Clean up temporary file
+    #   ansible.builtin.file:
+    #     path: "/tmp/wp-cli.phar"
+    #     state: absent
+
+    - name: Verify WP-CLI installation
+      ansible.builtin.command: "/usr/local/bin/wp --info"
+      register: wpcli_info
+      changed_when: false
+
+    - name: Check if WordPress is already installed
+      ansible.builtin.command: wp core is-installed --path=/var/www/wordpress
+      become_user: www-data
+      register: wp_is_installed
+      # We ignore failure here because "not installed" returns an error code, which is what we want to detect.
+      failed_when: false
+      changed_when: false
+
+    # 3. Run the "5-Minute Install" automatically (Sets title, admin user, etc.)
+    - name: Install WordPress Core
+      ansible.builtin.command: >
+        wp core install
+        --path=/var/www/wordpress
+        --url="http://192.168.67.131"
+        --title="Welcome to the EchoFrame Database"
+        --admin_user="{{ wordpress_admin_user }}"
+        --admin_password="{{ wordpress_admin_password }}"
+        --admin_email="{{ wordpress_admin_email }}"
+      become_user: www-data
+      when: wp_is_installed.rc != 0
+      changed_when: true
+
+    - name: Enable WP Debugging
+      ansible.builtin.lineinfile:
+        path: /var/www/wordpress/wp-config.php
+        regexp: "define\\( 'WP_DEBUG', false \\);"
+        line: "define( 'WP_DEBUG', true );"
+        state: present
+      become_user: www-data
+
+    - name: Allow Unfiltered Uploads
+      ansible.builtin.lineinfile:
+        path: /var/www/wordpress/wp-config.php
+        line: "define( 'ALLOW_UNFILTERED_UPLOADS', true );"
+        insertafter: "define( 'DB_COLLATE', '' );"
+        state: present
+      become_user: www-data
+
+    # -------------------------------------------------------
+    # Create Directory & Styles
+    # -------------------------------------------------------
+    - name: Create Neon Pulse theme directory
+      ansible.builtin.file:
+        path: /var/www/wordpress/wp-content/themes/neon
+        state: directory
+        owner: www-data
+        group: www-data
+        mode: '0755'
+
+    - name: Create Minimal Style.css
+      ansible.builtin.copy:
+        dest: /var/www/wordpress/wp-content/themes/neon/style.css
+        owner: www-data
+        group: www-data
+        mode: '0644'
+        content: |
+          /*
+          Theme Name: Neon Pulse
+          Version: 1.0
+          */
+          body { background: #000; color: #0f0; font-family: monospace; padding: 50px; text-align: center; }
+          input { background: #111; border: 1px solid #0f0; color: #fff; padding: 10px; width: 60%; }
+          button { background: #0f0; color: #000; border: none; padding: 10px 20px; cursor: pointer; font-weight: bold; }
+          #results { margin-top: 20px; text-align: left; white-space: pre-wrap; border: 1px dashed #333; padding: 20px; }
+
+    # -------------------------------------------------------
+    # 2. BACKEND: The Vulnerable API (functions.php)
+    # -------------------------------------------------------
+    - name: Create functions.php with SQL Injection Vulnerability
+      ansible.builtin.copy:
+        dest: /var/www/wordpress/wp-content/themes/neon/functions.php
+        owner: www-data
+        group: www-data
+        mode: '0644'
+        content: |
+          <?php
+          add_action('rest_api_init', function () {
+              register_rest_route('ctf/v1', '/search', [
+                  'methods' => 'GET',
+                  'callback' => 'ctf_sqli_search',
+                  'permission_callback' => '__return_true',
+              ]);
+          });
+
+          function ctf_sqli_search($request) {
+              global $wpdb;
+              $term = $request['q'];
+              // VULNERABLE QUERY
+              $query = "SELECT * FROM wp_users WHERE user_login LIKE '%" . $term . "%'";
+              $results = $wpdb->get_results($query);
+              return rest_ensure_response($results);
+          }
+          ?>
+
+    # -------------------------------------------------------
+    # 3. FRONTEND: The Search Box UI (index.php)
+    # -------------------------------------------------------
+    - name: Create Index.php with Robust API URL
+      ansible.builtin.copy:
+        dest: /var/www/wordpress/wp-content/themes/neon/index.php
+        owner: www-data
+        group: www-data
+        mode: '0644'
+        content: |
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <title>CTF Terminal</title>
+              <link rel="stylesheet" href="<?php echo get_stylesheet_uri(); ?>">
+          </head>
+          <body>
+              <div class="main-container">
+                  <h1>>> SYSTEM_ACCESS_TERMINAL</h1>
+                  <p>Target: <strong>wp_users</strong> database</p>
+
+                  <input type="text" id="db_query" placeholder="admin" onkeydown="if(event.key==='Enter') runExploit()">
+                  <button onclick="runExploit()">EXECUTE</button>
+
+                  <div id="results">waiting for input...</div>
+              </div>
+
+              <script>
+                  function runExploit() {
+                      var input = document.getElementById('db_query').value;
+                      var resultBox = document.getElementById('results');
+                      resultBox.innerHTML = "Querying database...";
+                      resultBox.style.color = "#0f0";
+
+                      // FIX: Use 'index.php?rest_route=' to bypass Nginx permalink issues
+                      // OLD: fetch('/wp-json/ctf/v1/search?q=' + encodeURIComponent(input))
+                      fetch('/index.php?rest_route=/ctf/v1/search&q=' + encodeURIComponent(input))
+                          .then(response => response.text())
+                          .then(text => {
+                              try {
+                                  const data = JSON.parse(text);
+                                  resultBox.innerHTML = JSON.stringify(data, null, 2);
+                              } catch (e) {
+                                  resultBox.style.color = "#ff00ff";
+                                  resultBox.innerText = "RAW SERVER OUTPUT:\n" + text;
+                              }
+                          })
+                          .catch(error => {
+                              resultBox.innerHTML = "NETWORK ERROR: " + error;
+                          });
+                  }
+              </script>
+              <?php wp_footer(); ?>
+          </body>
+          </html>
+
+    # -------------------------------------------------------
+    # 4. ACTIVATION & FIXES (Fixes the 404 Error)
+    # -------------------------------------------------------
+    - name: Activate Neon Pulse Theme
+      ansible.builtin.command: wp theme activate neon --path=/var/www/wordpress
+      become_user: www-data
+      changed_when: true
+
+    # THIS TASK FIXES THE "FILE NOT FOUND" API ERROR
+    - name: Flush Permalinks (Fix API 404s)
+      ansible.builtin.command: wp rewrite structure '/%postname%/' --path=/var/www/wordpress
+      become_user: www-data
+      changed_when: true
+
+# -----------------------------------------------------------------------------
+# PLAY 3: Set up Nginx Web Server
+# -----------------------------------------------------------------------------
+# This runs on servers in the [webserver] group (fffics-srv-4)
 
 - name: Configure Web Server
   hosts: webserver
