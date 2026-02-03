@@ -84,18 +84,6 @@
         dest: "/usr/local/bin/wp"
         mode: '0755' # Executable permission
 
-    # - name: Move WP-CLI to global bin directory
-    #   ansible.builtin.copy:
-    #     src: "/tmp/wp-cli.phar"
-    #     dest: "/usr/local/bin/wp"
-    #     mode: "0755"
-    #     remote_src: true
-
-    # - name: Clean up temporary file
-    #   ansible.builtin.file:
-    #     path: "/tmp/wp-cli.phar"
-    #     state: absent
-
     - name: Verify WP-CLI installation
       ansible.builtin.command: "/usr/local/bin/wp --info"
       register: wpcli_info
@@ -123,13 +111,13 @@
       when: wp_is_installed.rc != 0
       changed_when: true
 
-    - name: Enable WP Debugging
-      ansible.builtin.lineinfile:
-        path: /var/www/wordpress/wp-config.php
-        regexp: "define\\( 'WP_DEBUG', false \\);"
-        line: "define( 'WP_DEBUG', true );"
-        state: present
-      become_user: www-data
+    # - name: Enable WP Debugging
+    #   ansible.builtin.lineinfile:
+    #     path: /var/www/wordpress/wp-config.php
+    #     regexp: "define\\( 'WP_DEBUG', false \\);"
+    #     line: "define( 'WP_DEBUG', true );"
+    #     state: present
+    #   become_user: www-data
 
     - name: Allow Unfiltered Uploads
       ansible.builtin.lineinfile:
@@ -150,53 +138,8 @@
         group: www-data
         mode: '0755'
 
-    - name: Create Minimal Style.css
-      ansible.builtin.copy:
-        dest: /var/www/wordpress/wp-content/themes/neon/style.css
-        owner: www-data
-        group: www-data
-        mode: '0644'
-        content: |
-          /*
-          Theme Name: Neon Pulse
-          Version: 1.0
-          */
-          body { background: #000; color: #0f0; font-family: monospace; padding: 50px; text-align: center; }
-          input { background: #111; border: 1px solid #0f0; color: #fff; padding: 10px; width: 60%; }
-          button { background: #0f0; color: #000; border: none; padding: 10px 20px; cursor: pointer; font-weight: bold; }
-          #results { margin-top: 20px; text-align: left; white-space: pre-wrap; border: 1px dashed #333; padding: 20px; }
-
     # -------------------------------------------------------
-    # 2. BACKEND: The Vulnerable API (functions.php)
-    # -------------------------------------------------------
-    - name: Create functions.php with SQL Injection Vulnerability
-      ansible.builtin.copy:
-        dest: /var/www/wordpress/wp-content/themes/neon/functions.php
-        owner: www-data
-        group: www-data
-        mode: '0644'
-        content: |
-          <?php
-          add_action('rest_api_init', function () {
-              register_rest_route('ctf/v1', '/search', [
-                  'methods' => 'GET',
-                  'callback' => 'ctf_sqli_search',
-                  'permission_callback' => '__return_true',
-              ]);
-          });
-
-          function ctf_sqli_search($request) {
-              global $wpdb;
-              $term = $request['q'];
-              // VULNERABLE QUERY
-              $query = "SELECT * FROM wp_users WHERE user_login LIKE '%" . $term . "%'";
-              $results = $wpdb->get_results($query);
-              return rest_ensure_response($results);
-          }
-          ?>
-
-    # -------------------------------------------------------
-    # 3. FRONTEND: The Search Box UI (index.php)
+    # 1. FRONTEND: The Search Box UI (index.php)
     # -------------------------------------------------------
     - name: Create Index.php with Robust API URL
       ansible.builtin.copy:
@@ -209,7 +152,6 @@
           <html>
           <head>
               <title>CTF Terminal</title>
-              <link rel="stylesheet" href="<?php echo get_stylesheet_uri(); ?>">
           </head>
           <body>
               <div class="main-container">
@@ -251,12 +193,40 @@
           </html>
 
     # -------------------------------------------------------
+    # 2. BACKEND: The Vulnerable API (functions.php)
+    # -------------------------------------------------------
+    - name: Create functions.php with SQL Injection Vulnerability
+      ansible.builtin.copy:
+        dest: /var/www/wordpress/wp-content/themes/neon/functions.php
+        owner: www-data
+        group: www-data
+        mode: '0644'
+        content: |
+          <?php
+          add_action('rest_api_init', function () {
+              register_rest_route('ctf/v1', '/search', [
+                  'methods' => 'GET',
+                  'callback' => 'ctf_sqli_search',
+                  'permission_callback' => '__return_true',
+              ]);
+          });
+
+          function ctf_sqli_search($request) {
+              global $wpdb;
+              $term = $request['q'];
+              // VULNERABLE QUERY
+              $query = "SELECT * FROM wp_users WHERE user_login LIKE '%" . $term . "%'";
+              $results = $wpdb->get_results($query);
+              return rest_ensure_response($results);
+          }
+
+    # -------------------------------------------------------
     # 4. ACTIVATION & FIXES (Fixes the 404 Error)
     # -------------------------------------------------------
-    - name: Activate Neon Pulse Theme
-      ansible.builtin.command: wp theme activate neon --path=/var/www/wordpress
-      become_user: www-data
-      changed_when: true
+    # - name: Activate Neon Pulse Theme
+    #   ansible.builtin.command: wp theme activate neon --path=/var/www/wordpress
+    #   become_user: www-data
+    #   changed_when: true
 
     # THIS TASK FIXES THE "FILE NOT FOUND" API ERROR
     - name: Flush Permalinks (Fix API 404s)
