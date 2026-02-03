@@ -49,14 +49,14 @@
         path: /var/www/wordpress/wp-config.php
       register: wp_config_check
 
-    - name: Reset Database
-      ansible.builtin.command: wp db reset --yes --path=/var/www/wordpress
-      become_user: www-data
-      register: wp_db_reset
-      # Only run if WP is actually there, otherwise this fails
-      when: wp_config_check.stat.exists
-      changed_when: "'Success' in wp_db_reset.stdout"
-      failed_when: wp_db_reset.rc != 0
+    # - name: Reset Database
+    #   ansible.builtin.command: wp db reset --yes --path=/var/www/wordpress
+    #   become_user: www-data
+    #   register: wp_db_reset
+    #   # Only run if WP is actually there, otherwise this fails
+    #   when: wp_config_check.stat.exists
+    #   changed_when: "'Success' in wp_db_reset.stdout"
+    #   failed_when: wp_db_reset.rc != 0
 
     - name: Remove existing WordPress directory
       ansible.builtin.file:
@@ -213,37 +213,36 @@
           </head>
           <body>
               <div class="main-container">
-                  <h1>>> SYSTEM_ACCESS_TERMINAL</h1>
-                  <p>Target: <strong>wp_users</strong> database</p>
+                  <h1>>> MAELSTROM_DATA_LINK_V.4.0</h1>
+                  <p>Target Asset: <strong>ARASAKA SUBNET 04 (COMPROMISED)</strong></p>
+                  <p style="font-size: 0.8em; color: #ff0055;">STATUS: CORP ICE BROKEN // DATA IS FREE</p>
 
-                  <input type="text" id="db_query" placeholder="admin" onkeydown="if(event.key==='Enter') runExploit()">
+                  <input type="text" id="db_query" placeholder="Enter_Arasaka_ID..." onkeydown="if(event.key==='Enter') runExploit()">
                   <button onclick="runExploit()">EXECUTE</button>
 
-                  <div id="results">waiting for input...</div>
+                  <div id="results">Awaiting query parameters...</div>
               </div>
 
               <script>
                   function runExploit() {
                       var input = document.getElementById('db_query').value;
                       var resultBox = document.getElementById('results');
-                      resultBox.innerHTML = "Querying database...";
+                      resultBox.innerHTML = "Bypassing Arasaka Firewalls... Searching Node...";
                       resultBox.style.color = "#0f0";
 
-                      // FIX: Use 'index.php?rest_route=' to bypass Nginx permalink issues
-                      // OLD: fetch('/wp-json/ctf/v1/search?q=' + encodeURIComponent(input))
                       fetch('/index.php?rest_route=/ctf/v1/search&q=' + encodeURIComponent(input))
                           .then(response => response.text())
                           .then(text => {
                               try {
                                   const data = JSON.parse(text);
-                                  resultBox.innerHTML = JSON.stringify(data, null, 2);
+                                  resultBox.innerHTML = "<strong>>> DATA RETRIEVED:</strong><br><pre>" + JSON.stringify(data, null, 2) + "</pre>";
                               } catch (e) {
                                   resultBox.style.color = "#ff00ff";
                                   resultBox.innerText = "RAW SERVER OUTPUT:\n" + text;
                               }
                           })
                           .catch(error => {
-                              resultBox.innerHTML = "NETWORK ERROR: " + error;
+                              resultBox.innerHTML = "NETWORK ERROR (ARASAKA TRACE DETECTED): " + error;
                           });
                   }
               </script>

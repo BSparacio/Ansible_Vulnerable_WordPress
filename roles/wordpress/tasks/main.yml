@@ -146,3 +146,30 @@
     name: php8.3-fpm
     state: started
     enabled: true
+
+- name: Fill database with Cyberpunk users
+  ansible.builtin.shell: |
+    if ! wp user get "$WP_USER" --field=login --path=/var/www/wordpress > /dev/null 2>&1; then
+      wp user create "$WP_USER" "$WP_EMAIL" --role="$WP_ROLE" --user_pass="$WP_PASS" --path=/var/www/wordpress
+      echo "changed"
+    else
+      echo "exists"
+    fi
+  args:
+    executable: /bin/bash
+  # This safely passes the variables into the shell environment
+  environment:
+    WP_USER: "{{ item.user }}"
+    WP_EMAIL: "{{ item.email }}"
+    WP_ROLE: "{{ item.role }}"
+    WP_PASS: "{{ item.pass }}"
+  register: user_creation_result
+  changed_when: "'changed' in user_creation_result.stdout"
+  become_user: www-data
+  loop:
+    - { user: 'johnny_silverhand', email: 'samurai@nightcity.net', role: 'editor', pass: 'ChippinIn2077!' }
+    - { user: 'jackie_welles', email: 'jackie@heywood.com', role: 'author', pass: 'MamaWellesRecipe' }
+    - { user: 'judy_alvarez', email: 'judy@mox.com', role: 'editor', pass: 'GhostInTheShell' }
+    - { user: 'panam_palmer', email: 'panam@aldocaldos.com', role: 'author', pass: 'QueenOfTheHighway' }
+    - { user: 'adam_smasher', email: 'arasaka@security.corp', role: 'subscriber', pass: 'YouLookLikeACutOfMeat' }
+    - { user: 'goro_takemura', email: 'goro@arasaka.net', role: 'subscriber', pass: 'GoodYakitori' }

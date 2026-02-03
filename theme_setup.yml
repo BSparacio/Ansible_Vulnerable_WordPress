@@ -6,7 +6,7 @@
 # 1. Create the Theme Directory
 - name: Create Neon Pulse theme directory
   ansible.builtin.file:
-    path: /var/www/wordpress/wp-content/themes/neon-pulse
+    path: /var/www/wordpress/wp-content/themes/neon
     state: directory
     owner: www-data
     group: www-data
@@ -15,7 +15,7 @@
 # 2. Create style.css (The Visuals)
 - name: Create Theme Stylesheet (Vaporwave CSS)
   ansible.builtin.copy:
-    dest: /var/www/wordpress/wp-content/themes/neon-pulse/style.css
+    dest: /var/www/wordpress/wp-content/themes/neon/style.css
     owner: www-data
     group: www-data
     mode: '0644' # Ensure this is readable by the web server
@@ -147,7 +147,7 @@
 # 3. Create index.php (The Structure)
 - name: Create Theme Template (index.php)
   ansible.builtin.copy:
-    dest: /var/www/wordpress/wp-content/themes/neon-pulse/index.php
+    dest: /var/www/wordpress/wp-content/themes/neon/index.php
     owner: www-data
     group: www-data
     mode: '0644'
@@ -190,6 +190,6 @@
 
 # 4. Activate the New Theme
 - name: Activate Neon Pulse Theme
-  ansible.builtin.command: wp theme activate neon-pulse --path=/var/www/wordpress
+  ansible.builtin.command: wp theme activate neon --path=/var/www/wordpress
   become_user: www-data
   changed_when: true
