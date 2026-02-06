@@ -1,197 +1,86 @@
-# Ansible Learning Demo: WordPress Deployment
+# CSEC 473 - Assignment 2: Wordpress Server with Vulnerable MySQL Database 
 
-Welcome! In this hands-on lab, you'll learn Ansible by deploying a real WordPress website across 3 servers.
+## Overview
 
-## What We're Building
+This project utilizes Ansible to deploy a three-tier vulnerable web application MySQL database, Nginx webserver, and WordPress webpage. It prepares the environment by installing necessary packages, configuring network communication between the reverse proxy and application layers, and deploys a custom vulnerable functions.php file containing a deliberate SQL injection directly to the WordPress server. Exploiting the SQL injection will reveal the hidden flag in a secret table within the schema. For competition environments, this playbook offers critical utility by ensuring rapid and consistent challenge deployment. The Ansible playbook is designed with idempotency checks such as verifying if wp-config.php exists before attempting re-installation—allowing organizers to repair or reset specific services without accidentally wiping the entire competition infrastructure. This setup presents a logic error hidden within custom code and forces competitors to analyze the application behavior and enumerate the database structure manually to locate the flag.
 
-```
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   Web Server    │     │ WordPress Server│     │ Database Server │
-│    (Nginx)      │ --> │   (PHP + WP)    │ --> │    (MySQL)      │
-│  fffics-srv-4   │     │  fffics-srv-3   │     │  fffics-srv-2   │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
-```
+## Vulnerability Description
+
+The vulnerability implemented in this deployment is an unauthenticated UNION-based SQL Injection (SQLi) located within a custom REST API endpoint. The exploit utilizes insecure string concatenation to build database queries rather than using WordPress's built-in prepared statements. For example, an attacker could pass a crafted value like ```' UNION SELECT 1,2,3,4,5,6,7,8,9,version()--``` as a parameter which could expose database metadata, user credentials, or other sensitive tables depending on the parameter. This vulnerability is significant because it allows an attacker to manipulate the backend SQL query structure via the URL search parameter. By injecting specific SQL commands, an attacker can bypass the intended query logic to inspect the database schema and retrieve data from arbitrary tables. This project was created with the purpose of being run on machines competing in a A/D CTF. The implemented vulnerability allows the exfiltration of the flag hidden within the custom wp_flags table.
 
 ## Prerequisites
 
-- VS Code installed on your computer
-- Access to your 3 lab servers (IPs provided by instructor)
+- Target OS: Ubuntu 22.04 LTS
+- Ansible version: 2.16.3 
+- Required control machine packages: ansible, ansible-lint, sshpass, git
+- Packages installed by Ansible: php, php-fpm, php-mysql, php-curl, php-gd, php-mbstring, php-xml, php-xmlrpc, php-soap, php-intl, php-zip, WP-CLI, python3-pymysql
 
----
+## Quick Start Commands
 
-## Session 1: Getting Started + MySQL
+### Step 1: Clone the GitHub Repository to the Target Machine.
 
-### Step 1: Open the Project in VS Code
+In a terminal, run:
 
-1. Open VS Code
-2. Go to **File → Open Folder**
-3. Navigate to this folder and click **Open**
-
-### Step 2: Update Your Server IPs
-
-Open `inventory.ini` and update the IP addresses to match YOUR servers:
-
-```ini
-[webserver]
-fffics-srv-4 ansible_host=YOUR_WEBSERVER_IP
-
-[wordpress]
-fffics-srv-3 ansible_host=YOUR_WORDPRESS_IP
-
-[database]
-fffics-srv-2 ansible_host=YOUR_DATABASE_IP
+```bash
+git clone https://github.com/BSparacio/Ansible_Vulnerable_WordPress.git
 ```
 
-### Step 3: Set Up SSH Keys
+### Step 2: Set Up SSH Keys (if you don't have one).
 
-Open a terminal in VS Code (**Terminal → New Terminal**) and run:
+In a terminal, run:
 
 ```bash
 ./setup-ssh.sh
 ```
 
-This will:
-- Generate an SSH key (if you don't have one)
-- Copy your key to all 3 servers
-- Test the connections
+### Step 3: Run the playbook.yml File.
 
-### Step 4: Test Ansible Connection
-
-Run this command to verify Ansible can reach all servers:
-
+In a terminal, run:
 ```bash
-ansible all -m ping
+ansible-playbook playbook.yml 
 ```
 
-You should see green "SUCCESS" messages for all 3 servers!
+## Documentation
+→ [Go to DEPLOYMENT.md](docs/DEPLOYMENT.md)
 
-### Step 5: Complete the MySQL Role
+→ [Go to EXPLOITATION.md](docs/EXPLOITATION.md)
 
-Open `roles/mysql/tasks/main.yml` in VS Code.
+## Competition Use Cases
 
-You'll see comment blocks explaining each task and `STUDENT TODO` markers where you need to write code.
+### Red Team Scenarios
 
-**Tasks to complete:**
-1. Install MySQL server package
-2. Start and enable MySQL service
-3. Set the root password
-4. Create the WordPress database
-5. Create the WordPress user
+This environment is ideal for practicing web application enumeration and manual SQL injection exploitation. It challenges students to understand the underlying logic of UNION-based attacks, column balancing, and database schema enumeration. It also serves as a target for lateral movement if the database server is segmented from the web server or privilege escalation if the wp_users table is exposed and passwords are cracked.
 
-### Step 6: Run the MySQL Playbook
+### Blue Team Scenarios
 
-```bash
-ansible-playbook playbook.yml --tags mysql
-```
+Defenders can use this environment to practice log analysis and incident response. The Nginx access logs will show the injection attempts, allowing Blue Teams to write regex signatures for detection. There is also an opportunity for Blue Team to remediate the vulnerability. Defenders can patch the functions.php file with ```$wpdb->prepare()``` to use Prepared Statements instead of string concatenation. Disabling the information_schema access or tightening user privileges will also prevent this expoit from occurring.
 
-### Step 7: Verify MySQL is Working
+### Gray Team
 
-```bash
-ansible database -m shell -a "mysql -u root -pStudentDemo123! -e 'SHOW DATABASES;'"
-```
+For competition organizers, this playbook is a means of reliably deploying challenges to competition machines. Because the infrastructure is defined as code, the environment can be reset or redeployed instantly between rounds or if the event of an emergency if the service is broken by Blue or Red team. This approach ensures a fair and consistent playing field for both teams.
 
-You should see the `wordpress` database listed!
+## Technical Details
 
----
+The Ansible playbook uses a modular role-based approach to configure the environment.
 
-## Session 2: WordPress + Nginx
+### Play 1: MySQL Database
 
-### Step 8: Complete the WordPress Role
+Targets the database layer, installing MySQL and creating a dedicated wordpress database and user. It also creates a custom wp_flags table and inserts the capture flag, ensuring the objective exists outside the standard WordPress schema.
 
-Open `roles/wordpress/tasks/main.yml`
+### Play 2: WordPress
 
-**Tasks to complete:**
-1. Install PHP and extensions
-2. Download WordPress
-3. Extract WordPress files
-4. Configure wp-config.php using template
-5. Set file ownership
+Configures the application layer. It installs PHP and the WordPress core files. It utilizes the wp-cli tool to configure the site details and manage users. Most importantly, it programmatically generates the neon theme by writing index.php, style.css, and functions.php directly to the server. This ensures the vulnerable code and the cyberpunk aesthetic are hardcoded into the deployment without requiring external downloads.
 
-### Step 9: Run the WordPress Playbook
+### Play 3: NGINX Webserver
 
-```bash
-ansible-playbook playbook.yml --tags wordpress
-```
-
-### Step 10: Complete the Nginx Role
-
-Open `roles/nginx/tasks/main.yml`
-
-**Tasks to complete:**
-1. Install Nginx
-2. Deploy site configuration
-3. Enable the WordPress site
-4. Start Nginx service
-
-### Step 11: Run the Full Playbook
-
-```bash
-ansible-playbook playbook.yml
-```
-
-### Step 12: Test Your Website!
-
-Open a browser and go to:
-
-```
-http://YOUR_WEBSERVER_IP
-```
-
-You should see the WordPress setup wizard!
-
----
-
-## Command Cheat Sheet
-
-| Command | What it does |
-|---------|--------------|
-| `ansible all -m ping` | Test connection to all servers |
-| `ansible-playbook playbook.yml` | Run the full playbook |
-| `ansible-playbook playbook.yml --tags mysql` | Run only MySQL tasks |
-| `ansible-playbook playbook.yml --check` | Dry run (show what would change) |
-| `ansible database -m shell -a "command"` | Run a command on database server |
+Sets up the Nginx web server as a reverse proxy, handling HTTP requests and forwarding PHP processing to the WordPress application. It manages the virtual host configuration to ensure the site resolves correctly on port 80.
 
 ## Troubleshooting
 
-### "Permission denied" errors
+### "Permission Denied" Errors
 - Make sure you ran `./setup-ssh.sh` first
 - Check that your SSH key was copied successfully
 
-### YAML syntax errors
-- Check your indentation (use spaces, not tabs!)
-- Make sure colons have a space after them: `name: value`
-- Variables need quotes: `"{{ variable_name }}"`
-
-### Can't connect to servers
+### Can't Connect to Server
 - Verify your IP addresses in `inventory.ini`
 - Make sure you're connected to the CyberRange network
-
----
-
-## VS Code Tips for YAML
-
-- **Indentation matters!** Use 2 spaces (VS Code should do this automatically)
-- Install the "YAML" extension for better syntax highlighting
-- If you see red squiggly lines, check your indentation
-
-## Connecting to Servers via VS Code (Optional)
-
-You can connect directly to your servers using VS Code Remote SSH:
-
-1. Install the "Remote - SSH" extension in VS Code
-2. Press `F1` and type "Remote-SSH: Connect to Host"
-3. Enter: `cyberrange@YOUR_SERVER_IP`
-4. When prompted about jump host, VS Code will use your SSH config
-
----
-
-## What You Learned
-
-- **Inventory files** - How to define servers and groups
-- **Playbooks** - How to organize tasks into plays
-- **Roles** - How to structure reusable automation
-- **Modules** - apt, service, file, template, mysql_user, mysql_db
-- **Variables** - How to use and reference variables
-- **Templates** - How to generate config files with Jinja2
-
-Congratulations! You've deployed a multi-tier web application with Ansible!
