@@ -4,71 +4,40 @@
 # =============================================================================
 # This role installs MySQL and creates a database for WordPress.
 #
-# VARIABLES AVAILABLE TO YOU:
-# - {{ mysql_root_password }}    - Password for MySQL root user
-# - {{ wordpress_db_name }}      - Name of the database to create
-# - {{ wordpress_db_user }}      - Username for WordPress
-# - {{ wordpress_db_password }}  - Password for WordPress user
-# - {{ wordpress_server }}       - IP address of the WordPress server
+# After completing this role, you will have:
+# - MySQL server installed and running
+# - A root password set (idempotently — safe to re-run)
+# - A dedicated WordPress database and user
+# - MySQL listening on all interfaces for remote connections
 # =============================================================================
 
-# -----------------------------------------------------------------------------
-# TASK 1: Install MySQL Server
-# -----------------------------------------------------------------------------
-# We need to install the MySQL database software.
-#
-# HINT: Use the 'apt' module
-# - name: what package to install (mysql-server)
-# - state: should it be "present" (installed) or "absent" (removed)?
-# - update_cache: yes (refreshes package list first)
-#
-# DOCUMENTATION: https://docs.ansible.com/ansible/latest/collections/ansible/builtin/apt_module.html
 
+# Install the MySQL server package. The apt module handles package management.
 - name: Install MySQL server
   ansible.builtin.apt:
     name: mysql-server
     state: present
     update_cache: true
 
-# -----------------------------------------------------------------------------
-# TASK 2: Install Python MySQL library
-# -----------------------------------------------------------------------------
 # Ansible needs a Python library to talk to MySQL.
-
 - name: Install Python MySQL library (required for Ansible)
   ansible.builtin.apt:
     name: python3-pymysql
     state: present
 
-# -----------------------------------------------------------------------------
-# TASK 3: Start and Enable MySQL Service
-# -----------------------------------------------------------------------------
-#
-# HINT: Use the 'service' module
-# - name: the service name (mysql)
-# - state: should be "started"
-# - enabled: yes (start on boot)
-#
-# DOCUMENTATION: https://docs.ansible.com/ansible/latest/collections/ansible/builtin/service_module.html
-
+# The service module ensures MySQL is running now and configures automatic start
+# on boot.
 - name: Start and enable MySQL service
   ansible.builtin.service:
     name: mysql
     state: started
     enabled: true
 
-# -----------------------------------------------------------------------------
-# TASK 4: Set MySQL Root Password
-# -----------------------------------------------------------------------------
-# For security, we need to set a password for the MySQL root user.
-#
-# HINT: Use the 'mysql_user' module
-# - name: the username (root)
-# - password: use the variable {{ mysql_root_password }}
-# - login_unix_socket: /var/run/mysqld/mysqld.sock (how to connect)
-#
-# DOCUMENTATION: https://docs.ansible.com/ansible/latest/collections/community/mysql/mysql_user_module.html
-
+# Set the root password idempotently
+# - check_implicit_admin: true — on a fresh install, MySQL root has no password,
+#   so the module first tries logging in without one.
+# - login_user / login_password — credentials for subsequent runs when the
+#   password is already set.
 - name: Set MySQL root password
   community.mysql.mysql_user:
     name: root
@@ -76,23 +45,11 @@
     login_password: "{{ mysql_root_password }}"
     password: "{{ mysql_root_password }}"
     login_unix_socket: /var/run/mysqld/mysqld.sock
+    check_implicit_admin: true
     state: present
 
-
-# -----------------------------------------------------------------------------
-# TASK 5: Create WordPress Database
-# -----------------------------------------------------------------------------
-# WordPress needs a database to store posts, users, settings, etc.
-#
-# HINT: Use the 'mysql_db' module
-# - name: the database name (use variable!)
-# - state: present
-# - login_user: root
-# - login_password: use the variable
-# - login_unix_socket: /var/run/mysqld/mysqld.sock
-#
-# DOCUMENTATION: https://docs.ansible.com/ansible/latest/collections/community/mysql/mysql_db_module.html
-
+# Create the WordPress database. The mysql_db module is idempotent — if the
+# database already exists, Ansible reports "ok" and moves on.
 - name: Create WordPress database
   community.mysql.mysql_db:
     name: "{{ wordpress_db_name }}"
@@ -101,23 +58,8 @@
     login_password: "{{ mysql_root_password }}"
     login_unix_socket: /var/run/mysqld/mysqld.sock
 
-
-# -----------------------------------------------------------------------------
-# TASK 6: Create WordPress Database User
-# -----------------------------------------------------------------------------
-# WordPress needs its own user to connect to the database.
-# We grant this user access ONLY to the wordpress database.
-# We also allow connections from the WordPress server's IP.
-#
-# HINT: Use the 'mysql_user' module
-# - name: the username (use variable!)
-# - password: use the variable
-# - priv: "{{ wordpress_db_name }}.*:ALL" (all permissions on wordpress db)
-# - host: "{{ wordpress_server }}" (allow connections from WordPress server)
-# - login_user, login_password, login_unix_socket: same as before
-#
-# DOCUMENTATION: https://docs.ansible.com/ansible/latest/collections/community/mysql/mysql_user_module.html
-
+# Create a dedicated MySQL user for WordPress with privileges limited to the
+# WordPress database only.
 - name: Create WordPress database user
   community.mysql.mysql_user:
     name: "{{ wordpress_db_user }}"
@@ -129,15 +71,9 @@
     login_password: "{{ mysql_root_password }}"
     login_unix_socket: /var/run/mysqld/mysqld.sock
 
-
-# -----------------------------------------------------------------------------
-# TASK 7: Configure MySQL to accept remote connections
-# -----------------------------------------------------------------------------
-# By default, MySQL only accepts connections from localhost.
-# We need to change the bind-address so WordPress can connect.
-#
-# This one is done for you - it's more advanced (uses lineinfile module)
-
+# Change bind-address to 0.0.0.0 so the WordPress server can connect over the
+# network.
+# Notify triggers the Restart MySQL handler only when this line changes.
 - name: Configure MySQL to accept remote connections
   ansible.builtin.lineinfile:
     path: /etc/mysql/mysql.conf.d/mysqld.cnf
@@ -145,16 +81,7 @@
     line: 'bind-address = 0.0.0.0'
   notify: Restart MySQL
 
-# -----------------------------------------------------------------------------
-# HANDLER: Restart MySQL
-# -----------------------------------------------------------------------------
-# Handlers run ONLY when notified by a task.
-# This restarts MySQL when the config changes.
-
-# -----------------------------------------------------------------------------
-# POPULATE DATABASE
-# -----------------------------------------------------------------------------
-# Task 1: Create the table (Using ROOT credentials)
+# Create the table (Using ROOT credentials).
 - name: Create wp_flags table for CTF
   community.mysql.mysql_query:
     login_db: "{{ wordpress_db_name }}"
@@ -164,23 +91,18 @@
     login_password: "{{ mysql_root_password }}"
     query: "CREATE TABLE IF NOT EXISTS wp_flags (id INT, flag VARCHAR(100), PRIMARY KEY (id)) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci;"
 
-# Task 2: Insert the flag (Using ROOT credentials)
+# Insert the flag into the new table (Using ROOT credentials).
 - name: Insert CTF Flag
   community.mysql.mysql_query:
     login_db: "{{ wordpress_db_name }}"
-    # CHANGE 1: Use root user
     login_user: "{{ mysql_root_user }}"
-    # CHANGE 2: Use the root password variable from all.yml
     login_password: "{{ mysql_root_password }}"
     query: "INSERT INTO wp_flags (id, flag) VALUES (1, 'flag{shattered_by_maelstrom}') ON DUPLICATE KEY UPDATE flag='flag{shattered_by_maelstrom}';"
 
-# -----------------------------------------------------------------------------
-# PERMISSION FIX: Ensure Web User Can See The Table
-# -----------------------------------------------------------------------------
+# Misconfiguration so that web user can see and query the table.
 - name: Grant WP User Access to Flag Table
   community.mysql.mysql_query:
     login_db: "{{ wordpress_db_name }}"
     login_user: "{{ mysql_root_user }}"
     login_password: "{{ mysql_root_password }}"
-    # FIX: Changed 'localhost' to '{{ wordpress_server }}' to match the existing user
     query: "GRANT SELECT ON {{ wordpress_db_name }}.wp_flags TO '{{ wordpress_db_user }}'@'{{ wordpress_server }}'"

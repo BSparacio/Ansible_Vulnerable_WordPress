@@ -4,48 +4,24 @@
 # =============================================================================
 # This role installs Nginx as a reverse proxy in front of WordPress.
 #
-# WHAT IS A REVERSE PROXY?
-# Instead of users connecting directly to WordPress, they connect to Nginx.
-# Nginx then forwards requests to WordPress. This provides:
-# - Better performance (Nginx handles static files)
-# - Security (WordPress isn't directly exposed)
-# - Flexibility (can add caching, SSL, load balancing later)
+# After completing this role, you will have:
+# - Nginx installed and running
+# - A site configuration that proxies requests to PHP-FPM on the WordPress server
+# - The default Nginx site removed to avoid conflicts
 #
-# VARIABLES AVAILABLE TO YOU:
-# - {{ wordpress_server }}      - IP of the WordPress server
-# - {{ wordpress_install_dir }} - Where WordPress files are
 # =============================================================================
 
-# -----------------------------------------------------------------------------
-# TASK 1: Install Nginx
-# -----------------------------------------------------------------------------
-# Install the Nginx web server package.
-#
-# HINT: Use the 'apt' module (same as MySQL task 1!)
-# - name: nginx
-# - state: present
-# - update_cache: yes
-#
-# DOCUMENTATION: https://docs.ansible.com/ansible/latest/collections/ansible/builtin/apt_module.html
-
+# Install the Nginx web server.
 - name: Install Nginx
   ansible.builtin.apt:
     name: nginx
     state: present
     update_cache: true
 
-# -----------------------------------------------------------------------------
-# TASK 2: Deploy Nginx site configuration
-# -----------------------------------------------------------------------------
-# We need to tell Nginx how to forward requests to WordPress.
-# This uses a template file (like wp-config.php in the WordPress role).
-#
-# HINT: Use the 'template' module
-# - src: wordpress.conf.j2
-# - dest: /etc/nginx/sites-available/wordpress
-#
-# DOCUMENTATION: https://docs.ansible.com/ansible/latest/collections/ansible/builtin/template_module.html
-
+# Deploy the Nginx site configuration from a Jinja2 template.
+# The template fills in the WordPress server IP and install directory so
+# Nginx knows where to forward requests.
+# Changes trigger a restart via the 'notify' handler.
 - name: Deploy Nginx site configuration
   ansible.builtin.template:
     src: wordpress.conf.j2
@@ -53,19 +29,8 @@
     mode: '0644'
   notify: Restart Nginx
 
-# -----------------------------------------------------------------------------
-# TASK 3: Enable the WordPress site
-# -----------------------------------------------------------------------------
-# Nginx uses symbolic links to enable sites.
-# We create a link from sites-enabled/ to sites-available/
-#
-# HINT: Use the 'file' module with state: link
-# - src: /etc/nginx/sites-available/wordpress (the file to link TO)
-# - dest: /etc/nginx/sites-enabled/wordpress (where to create the link)
-# - state: link
-#
-# DOCUMENTATION: https://docs.ansible.com/ansible/latest/collections/ansible/builtin/file_module.html
-
+# Activate the site by creating a symlink from sites-enabled/ to
+# sites-available/. Nginx only reads configs from sites-enabled/.
 - name: Enable WordPress site
   ansible.builtin.file:
     src: /etc/nginx/sites-available/wordpress
@@ -73,29 +38,14 @@
     state: link
   notify: Restart Nginx
 
-# -----------------------------------------------------------------------------
-# TASK 4: Remove default Nginx site
-# -----------------------------------------------------------------------------
-# Nginx comes with a default site that would conflict with ours.
-
+# Remove default Nginx site. Changes trigger a restart via the 'notify' handler.
 - name: Remove default Nginx site
   ansible.builtin.file:
     path: /etc/nginx/sites-enabled/default
     state: absent
   notify: Restart Nginx
 
-# -----------------------------------------------------------------------------
-# TASK 5: Start and enable Nginx
-# -----------------------------------------------------------------------------
-# Make sure Nginx is running and starts on boot.
-#
-# HINT: Use the 'service' module (same as MySQL task 3!)
-# - name: nginx
-# - state: started
-# - enabled: yes
-#
-# DOCUMENTATION: https://docs.ansible.com/ansible/latest/collections/ansible/builtin/service_module.html
-
+# Ensure Nginx is running and set to start on boot.
 - name: Ensure Nginx is running
   ansible.builtin.service:
     name: nginx

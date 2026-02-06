@@ -3,12 +3,11 @@
 # SHARED VARIABLES FOR ALL SERVERS
 # =============================================================================
 # Variables defined here are available to ALL playbooks and roles.
-# This is where we put configuration that multiple roles need to share.
-#
-# WHY USE VARIABLES?
-# - Change a password once, it updates everywhere
-# - Makes playbooks reusable for different environments
-# - Keeps sensitive data separate from logic
+
+# =============================================================================
+# DATABASE CONFIGURATION
+# =============================================================================
+target_ip_address: "100.65.6.151"
 
 # =============================================================================
 # DATABASE CONFIGURATION
@@ -47,13 +46,13 @@ wordpress_install_dir: "/var/www/wordpress"
 # We use hostvars to look up the IP address from our inventory.
 
 # Database server IP (MySQL listens here)
-database_server: "{{ hostvars['student']['ansible_host'] }}"
+database_server: "{{ hostvars['cyberrange']['ansible_host'] }}"
 
 # WordPress server IP (PHP application runs here)
-wordpress_server: "{{ hostvars['student']['ansible_host'] }}"
+wordpress_server: "{{ hostvars['cyberrange']['ansible_host'] }}"
 
 # Web server IP (Nginx reverse proxy)
-webserver_ip: "{{ hostvars['student']['ansible_host'] }}"
+webserver_ip: "{{ hostvars['cyberrange']['ansible_host'] }}"
 
 # =============================================================================
 # PHP CONFIGURATION
