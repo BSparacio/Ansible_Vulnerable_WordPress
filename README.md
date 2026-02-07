@@ -25,7 +25,24 @@ In a terminal, run:
 git clone https://github.com/BSparacio/Ansible_Vulnerable_WordPress.git
 ```
 
-### Step 2: Set Up SSH Keys (if you don't have one).
+### Step 2: Update Inventory With Correct Server IPs
+
+Open `inventory.ini` and update the IP addresses to match the target server:
+
+Expected file layout:
+
+```ini
+[webserver]
+<HOSTNAME> ansible_host=<YOUR_TARGET_IP>
+
+[wordpress]
+<HOSTNAME> ansible_host=<YOUR_TARGET_IP>
+
+[database]
+<HOSTNAME> ansible_host=<YOUR_TARGET_IP>
+```
+
+### Step 3: Set Up SSH Keys (if you don't have one).
 
 In a terminal, run:
 
@@ -33,7 +50,7 @@ In a terminal, run:
 ./setup-ssh.sh
 ```
 
-### Step 3: Run the playbook.yml File.
+### Step 4: Run the playbook.yml File.
 
 In a terminal, run:
 ```bash
