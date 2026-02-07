@@ -29,6 +29,7 @@
 - name: Set PHP configuration path variable
   ansible.builtin.set_fact:
     php_fpm_pool_path: "/etc/php/{{ php_version_detected.stdout }}/fpm/pool.d/www.conf"
+    php_fpm_service_name: "php{{ php_version_detected.stdout }}-fpm"
 
 # Create a target directory to extract files into it.
 - name: Create WordPress directory
