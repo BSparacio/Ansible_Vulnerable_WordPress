@@ -94,7 +94,7 @@
 - name: Ensure PHP-FPM is running
   ansible.builtin.service:
     name: "{{ php_fpm_service_name }}"
-    state: started
+    state: restarted
     enabled: true
 
 # Populate the database with fake users. Idempotency is
