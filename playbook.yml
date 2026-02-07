@@ -78,7 +78,6 @@
       failed_when: false
       changed_when: false
 
-    # 3. Run the "5-Minute Install" automatically (Sets title, admin user, etc.)
     - name: Install WordPress Core
       ansible.builtin.command: >
         wp core install
@@ -107,6 +106,21 @@
         owner: www-data
         group: www-data
         mode: '0755'
+
+    - name: Create style.css (Required for WP Theme Recognition)
+      ansible.builtin.copy:
+        dest: /var/www/wordpress/wp-content/themes/neon/style.css
+        owner: www-data
+        group: www-data
+        mode: '0644'
+        content: |
+          /*
+          Theme Name: Neon
+          Description: Cyberpunk CTF Theme
+          Author: CyberRange
+          Version: 1.0
+          */
+          body { background-color: #0d0d0d; color: #00ff00; font-family: monospace; }
 
     - name: Create Index.php with Robust API URL
       ansible.builtin.copy:
@@ -188,6 +202,11 @@
       ansible.builtin.command: wp rewrite structure '/%postname%/' --path=/var/www/wordpress
       become_user: www-data
       changed_when: true
+
+    - name: Activate Neon Theme
+      ansible.builtin.command: wp theme activate neon --path=/var/www/wordpress
+      become_user: www-data
+      changed_when: false
 
 # This runs on servers in the [webserver] group.
 - name: Configure Web Server

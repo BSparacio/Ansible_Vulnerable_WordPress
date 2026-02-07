@@ -11,6 +11,15 @@
 #
 # =============================================================================
 
+# Kill Apache2
+# - Without this, apache2 will hog port 80 and prevent nginx from deploying correctly
+- name: Stop and Disable Apache2 (if present)
+  ansible.builtin.service:
+    name: apache2
+    state: stopped
+    enabled: false
+  ignore_errors: true  # Prevents crash if Apache isn't installed
+
 # Install the Nginx web server.
 - name: Install Nginx
   ansible.builtin.apt:
