@@ -42,6 +42,12 @@ Expected file layout:
 <HOSTNAME> ansible_host=<YOUR_TARGET_IP>
 ```
 
+### Step 2b: Update Global Variables With Correct Server IP
+
+Open `group_vars/all.yml` and update the IP addresse assocaited with the target_ip_address variable:
+
+![Alt text](../screenshots/deployment/change_global_ip_variable.png)
+
 ### Step 3: Set Up SSH Keys (if you don't have one).
 
 In a terminal, run:
